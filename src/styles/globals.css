@@ -1,0 +1,129 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Source+Serif+Pro:wght@400;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    
+    /* Wamda Custom Colors */
+    --wamda-primary: 30 25% 97%;
+    --wamda-secondary: 340 73% 22%;
+    --wamda-neutral-1: 30 18% 95%;
+    --wamda-neutral-2: 30 10% 86%;
+    --wamda-neutral-3: 30 5% 58%;
+    --wamda-neutral-4: 30 1% 29%;
+    --wamda-accent-1: 30 15% 80%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-wamda-primary text-wamda-neutral-4 font-mono;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+  }
+}
+
+@layer components {
+  .paper-button {
+    @apply px-6 py-2 font-mono font-medium border border-wamda-neutral-2 
+           bg-wamda-primary text-wamda-neutral-4 rounded-sm 
+           transition-all duration-300 ease-in-out
+           hover:bg-wamda-neutral-1 hover:shadow-md 
+           active:scale-[0.98] focus:outline-none focus:ring-1 
+           focus:ring-wamda-secondary;
+  }
+  
+  .manga-panel {
+    @apply border border-wamda-neutral-4 bg-wamda-neutral-1 relative overflow-hidden;
+    box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.05);
+    transform-origin: center;
+  }
+  
+  .manga-panel::before {
+    content: "";
+    @apply absolute inset-0 bg-cover opacity-5 pointer-events-none;
+  }
+  
+  .rough-border {
+    @apply overflow-visible;
+    filter: url('#roughness-filter');
+  }
+  
+  .nav-link {
+    @apply font-serif text-lg text-wamda-neutral-4 relative inline-block;
+  }
+  
+  .nav-link::after {
+    content: '';
+    @apply absolute bottom-0 left-0 w-0 h-[1px] bg-wamda-secondary 
+           transition-all duration-300 ease-in-out;
+  }
+  
+  .nav-link:hover::after {
+    @apply w-full;
+  }
+}
+
+/* Utility Classes */
+:root {
+  --primary: #007AFF;
+  --secondary: #5856D6;
+  --background: #FFFFFF;
+  --surface: #F2F2F7;
+  --text: #000000;
+  --text-secondary: #8E8E93;
+  --border: #C6C6C8;
+  --error: #FF3B30;
+  --success: #34C759;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--background);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Utility Classes */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+} 
