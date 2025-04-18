@@ -1,0 +1,29 @@
+.card {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+.authorLink {
+    text-decoration: none;
+    color: inherit;
+}
+
+.authorLink:hover {
+    text-decoration: underline;
+}
+
+.videoContainer {
+    background-color: var(--mantine-color-dark-6);
+    display: block;
+    width: 100%;
+    position: relative;
+}
+
+.videoElement {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    background-color: var(--mantine-color-dark-6);
+}

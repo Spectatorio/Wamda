@@ -1,0 +1,94 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  /* display: flex; */ /* Removed - AppShell handles layout */
+  /* place-items: center; */ /* Removed - AppShell handles layout */
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}
+/* Removed extra closing brace here */
+
+/* Tiptap Placeholder Styling Test */
+.ProseMirror p.is-editor-empty:first-child::before {
+content: attr(data-placeholder);
+float: left;
+color: #adb5bd; /* Mantine gray color */
+pointer-events: none;
+height: 0;
+} /* Added missing closing brace */
+
+/* BlockNote Editor Styles */
+.bn-editor-container {
+  flex-grow: 1;
+  position: relative; /* Needed for positioning of menus */
+  padding: 1rem; /* Add some padding around the raw view */
+  overflow-y: auto; /* Allow scrolling within the editor */
+  min-height: 300px; /* Ensure minimum height */
+  display: flex; /* Use flexbox */
+  flex-direction: column; /* Stack children vertically */
+}
+
+/* Ensure the raw view itself expands */
+.bn-editor-container > .blocknote {
+  flex-grow: 1;
+}
