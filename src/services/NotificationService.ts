@@ -1,210 +1,228 @@
 import { supabase } from '@/lib/supabaseClient';
 import { Database } from '@/types/supabase';
-import { RealtimeChannel } from '@supabase/supabase-js';
-import { NotificationWithActor } from '@/components/notifications/NotificationsPanel'; // Assuming this type is needed and defined here
+import { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import { NotificationWithActor } from '@/components/notifications/NotificationsPanel';
 
-// Define the structure for the actor profile cache item
-type ActorProfile = Pick<Database['public']['Tables']['profiles']['Row'], 'username' | 'avatar_url'>;
+type NotificationState = {
+    notifications: NotificationWithActor[];
+    unreadCount: number;
+    isLoading: boolean;
+    error: string | null;
+};
+
+type StateUpdateCallback = (newState: NotificationState) => void;
+
+type ActorProfile = Pick<Database['public']['Tables']['profiles']['Row'], 'username' | 'avatar_url'> | null;
 
 export class NotificationService {
-    private userProfileId: number | null = null;
+    private supabase: SupabaseClient<Database>;
+    private userId: number | null = null;
     private channel: RealtimeChannel | null = null;
     private actorProfileCache = new Map<number, ActorProfile>();
 
-    // Public state properties that the hook can access
-    public notifications: NotificationWithActor[] = [];
-    public unreadCount: number = 0;
-    public isLoading: boolean = true;
-    public error: string | null = null;
+    private state: NotificationState = {
+        notifications: [],
+        unreadCount: 0,
+        isLoading: true,
+        error: null,
+    };
 
-    // Callback to notify the hook of state changes
-    private onStateChange: () => void = () => {};
+    private onUpdate: StateUpdateCallback;
 
-    constructor(onStateChangeCallback: () => void) {
-        this.onStateChange = onStateChangeCallback;
-        console.log('[NotificationService] Instance created.');
+    constructor(supabaseClient: SupabaseClient<Database>, onUpdateCallback: StateUpdateCallback) {
+        this.supabase = supabaseClient;
+        this.onUpdate = onUpdateCallback;
+        console.log('[NotificationService] Initialized');
     }
 
-    // Method to set the user profile ID and trigger initial setup
-    public setUserProfile(profileId: number | null): void {
-        console.log(`[NotificationService] Setting user profile ID to: ${profileId}`);
-        if (this.userProfileId === profileId) {
-            console.log('[NotificationService] Profile ID unchanged, skipping setup.');
-            return; // Avoid redundant setup if ID hasn't changed
-        }
 
-        this.userProfileId = profileId;
-        this.cleanupRealtimeSubscription(); // Clean up previous subscription if any
-
-        if (profileId) {
-            this.isLoading = true;
-            this.error = null;
-            this.notifications = [];
-            this.unreadCount = 0;
-            this._notifyStateChange(); // Notify initial loading state
-
-            this.fetchInitialNotifications();
-            this.setupRealtimeSubscription();
-        } else {
-            // User logged out or no profile ID
-            this.notifications = [];
-            this.unreadCount = 0;
-            this.isLoading = false;
-            this.error = null;
-            this._notifyStateChange();
-        }
-    }
-
-    // Fetches initial notifications
-    private async fetchInitialNotifications(): Promise<void> {
-        if (!this.userProfileId) {
-            console.log('[NotificationService] fetchInitialNotifications: No userProfileId.');
-            this.isLoading = false;
-            this._notifyStateChange();
+    public setUserId(userId: number | null): void {
+        console.log(`[NotificationService] Setting userId from ${this.userId} to ${userId}`);
+        if (this.userId === userId) {
             return;
         }
 
-        console.log('[NotificationService] Fetching initial notifications...');
-        this.isLoading = true;
-        this.error = null;
-        this._notifyStateChange(); // Notify loading state
+        this.userId = userId;
+        this.cleanup();
+
+        if (this.userId) {
+            this.state = { ...this.state, isLoading: true, error: null, notifications: [] };
+            this.notifyStateUpdate();
+            this.fetchInitialNotifications();
+            this.subscribeToRealtime();
+        } else {
+            this.state = { notifications: [], unreadCount: 0, isLoading: false, error: null };
+            this.notifyStateUpdate();
+        }
+    }
+
+    public async markNotificationsAsRead(): Promise<void> {
+        if (!this.userId || this.state.notifications.length === 0) return;
+
+        const unreadIds = this.state.notifications.filter(n => !n.is_read).map(n => n.id);
+
+        if (unreadIds.length === 0) {
+            return;
+        }
+
+        console.log('[NotificationService] Marking notifications as read:', unreadIds);
+
+        const previousNotifications = [...this.state.notifications];
+        this.state.notifications = this.state.notifications.map(n =>
+            unreadIds.includes(n.id) ? { ...n, is_read: true } : n
+        );
+        this.updateUnreadCount();
+        this.notifyStateUpdate();
 
         try {
-            const { data, error: fetchError } = await supabase
+            const { error: updateError } = await this.supabase
+                .from('notifications')
+                .update({ is_read: true })
+                .in('id', unreadIds)
+                .eq('recipient_user_id', this.userId);
+
+            if (updateError) throw updateError;
+
+            console.log('[NotificationService] Successfully marked notifications as read in DB:', unreadIds);
+        } catch (error: any) {
+            console.error('[NotificationService] Error marking notifications as read:', error);
+            this.state.notifications = previousNotifications;
+            this.updateUnreadCount();
+            this.state.error = 'Failed to update notification status.';
+            this.notifyStateUpdate();
+        }
+    }
+
+    public cleanup(): void {
+        if (this.channel) {
+            console.log(`[NotificationService] Removing channel for user: ${this.userId}`);
+            this.supabase.removeChannel(this.channel)
+                .then(status => console.log(`[NotificationService] Channel removal status: ${status}`))
+                .catch(error => console.error(`[NotificationService] Error removing channel:`, error));
+            this.channel = null;
+        }
+    }
+
+    public getState(): NotificationState {
+        return { ...this.state };
+    }
+
+
+    private notifyStateUpdate(): void {
+        this.updateUnreadCount();
+        this.onUpdate({ ...this.state });
+    }
+
+     private updateUnreadCount(): void {
+        this.state.unreadCount = this.state.notifications.filter(n => !n.is_read).length;
+    }
+
+
+    private async fetchInitialNotifications(): Promise<void> {
+        if (!this.userId) return;
+
+        console.log('[NotificationService] Fetching initial notifications...');
+        this.state.isLoading = true;
+        this.state.error = null;
+        this.notifyStateUpdate();
+
+        try {
+            const { data, error: fetchError } = await this.supabase
                 .from('notifications')
                 .select('*, actor:actor_user_id(username, avatar_url)')
-                .eq('recipient_user_id', this.userProfileId)
+                .eq('recipient_user_id', this.userId)
                 .order('created_at', { ascending: false })
-                .limit(15); // Consider making limit configurable?
+                .limit(15);
 
             if (fetchError) throw fetchError;
 
-            const formattedNotifications = data?.map((n: any) => ({
+            this.state.notifications = data?.map((n: any) => ({
                 ...n,
-                actor: n.actor ?? null // Handle case where actor might be null
+                actor: n.actor ?? null
             })) || [];
-
-            this.notifications = formattedNotifications;
-            this._updateUnreadCount(); // Calculate unread count based on fetched data
-            console.log('[NotificationService] Initial notifications fetched successfully.');
+            console.log('[NotificationService] Initial fetch successful:', this.state.notifications.length, 'notifications');
 
         } catch (err: any) {
             console.error("[NotificationService] Error fetching initial notifications:", err);
-            this.error = err.message || 'Failed to fetch notifications';
-            this.notifications = [];
-            this.unreadCount = 0;
+            this.state.error = err.message || 'Failed to fetch notifications';
+            this.state.notifications = [];
         } finally {
-            this.isLoading = false;
-            this._notifyStateChange(); // Notify final state
+            this.state.isLoading = false;
+            this.notifyStateUpdate();
         }
     }
 
-    // Sets up the real-time subscription
-    private setupRealtimeSubscription(): void {
-        if (!this.userProfileId || this.channel) {
-             console.log(`[NotificationService] Skipping subscription setup. UserID: ${this.userProfileId}, Channel Exists: ${!!this.channel}`);
-            return;
-        }
+    private subscribeToRealtime(): void {
+        if (!this.userId || this.channel) return;
 
-        console.log(`[NotificationService] Setting up notification channel for user: ${this.userProfileId}`);
-        this.channel = supabase
-            .channel(`notifications:${this.userProfileId}`)
-            .on<any>( // Use specific type if available from Supabase types
+        console.log(`[NotificationService] Setting up realtime channel for user: ${this.userId}`);
+        const channel = this.supabase
+            .channel(`notifications:${this.userId}`)
+            .on<Database['public']['Tables']['notifications']['Row']>(
                 'postgres_changes',
                 {
                     event: 'INSERT',
                     schema: 'public',
                     table: 'notifications',
-                    filter: `recipient_user_id=eq.${this.userProfileId}`
+                    filter: `recipient_user_id=eq.${this.userId}`
                 },
-                async (payload: { new: any }) => { // Use specific type for payload.new
-                    console.log('[NotificationService] New notification received!', payload);
-                    const actorProfile = await this._fetchActorProfile(payload.new.actor_user_id);
-                    const newNotification: NotificationWithActor = {
-                        ...payload.new,
-                        actor: actorProfile
-                    };
-                    // Add to start and limit array size (e.g., 50)
-                    this.notifications = [newNotification, ...this.notifications.slice(0, 49)];
-                    this._updateUnreadCount();
-                    this._notifyStateChange();
-                }
+                (payload) => this.handleRealtimeInsert(payload.new)
             )
             .subscribe((status: string, err?: Error) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log(`[NotificationService] Successfully subscribed to notifications channel for user: ${this.userProfileId}`);
+                    console.log(`[NotificationService] Successfully subscribed to notifications channel for user: ${this.userId}`);
                 }
                 if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                    console.error(`[NotificationService] Notification channel error for user ${this.userProfileId}:`, status, err);
-                    this.error = `Realtime connection failed: ${status}`;
-                    this._notifyStateChange();
+                    console.error(`[NotificationService] Notification channel error for user ${this.userId}:`, status, err);
+                    this.state.error = `Realtime connection failed: ${status}`;
+                    this.notifyStateUpdate();
                 }
                  if (status === 'CLOSED') {
-                    console.log(`[NotificationService] Notification channel closed for user: ${this.userProfileId}`);
-                    // Optionally attempt to resubscribe or handle closure
+                    console.log(`[NotificationService] Notification channel closed for user: ${this.userId}`);
                 }
             });
-        console.log('[NotificationService] Notification channel setup initiated.');
+
+        this.channel = channel;
     }
 
-    // Cleans up the real-time subscription
-    public cleanupRealtimeSubscription(): void {
-        if (this.channel) {
-            console.log(`[NotificationService] Removing notification channel for user: ${this.userProfileId}`);
-            supabase.removeChannel(this.channel)
-                .then((status: string | { error?: Error | undefined; } | { status: string; }) => console.log(`[NotificationService] Channel removal status:`, status))
-                .catch((error: any) => console.error(`[NotificationService] Error removing channel:`, error));
-            this.channel = null;
+    private async handleRealtimeInsert(newRecord: Database['public']['Tables']['notifications']['Row']): Promise<void> {
+        console.log('[NotificationService] New notification received via realtime!', newRecord);
+
+        if (!newRecord || !newRecord.actor_user_id) {
+            console.warn('[NotificationService] Received incomplete notification payload:', newRecord);
+            return;
         }
-    }
 
-    // Marks notifications as read
-    public async markNotificationsAsRead(): Promise<void> {
-        if (!this.userProfileId) return;
-
-        const unreadIds = this.notifications.filter(n => !n.is_read).map(n => n.id);
-        if (unreadIds.length === 0) return;
-
-        console.log('[NotificationService] Marking notifications as read:', unreadIds);
-
-        // Optimistic update
-        const previousNotifications = [...this.notifications];
-        this.notifications = this.notifications.map(n =>
-            unreadIds.includes(n.id) ? { ...n, is_read: true } : n
-        );
-        this._updateUnreadCount();
-        this._notifyStateChange();
+        if (this.state.notifications.some(n => n.id === newRecord.id)) {
+            console.log(`[NotificationService] Notification ${newRecord.id} already exists, skipping.`);
+            return;
+        }
 
         try {
-            const { error: updateError } = await supabase
-                .from('notifications')
-                .update({ is_read: true })
-                .in('id', unreadIds)
-                .eq('recipient_user_id', this.userProfileId);
+            const actorProfile = await this.fetchActorProfile(newRecord.actor_user_id);
+            const newNotification: NotificationWithActor = {
+                ...newRecord,
+                actor: actorProfile
+            };
 
-            if (updateError) throw updateError;
+            this.state.notifications = [newNotification, ...this.state.notifications.slice(0, 49)];
+            this.notifyStateUpdate();
 
-            console.log('[NotificationService] Successfully marked notifications as read in DB:', unreadIds);
-
-        } catch (err: any) {
-            console.error('[NotificationService] Error marking notifications as read:', err);
-            this.error = 'Failed to update notification status.';
-            // Rollback optimistic update
-            this.notifications = previousNotifications;
-            this._updateUnreadCount();
-            this._notifyStateChange();
+        } catch (error) {
+            console.error('[NotificationService] Error processing realtime notification:', error);
         }
     }
 
-    // Helper to fetch actor profile with caching
-    private async _fetchActorProfile(actorId: number): Promise<ActorProfile | null> {
-        console.log('[NotificationService] _fetchActorProfile called with actorId:', actorId);
+    private async fetchActorProfile(actorId: number): Promise<ActorProfile> {
+        console.log('[NotificationService] Fetching profile for actorId:', actorId);
         if (this.actorProfileCache.has(actorId)) {
+            console.log('[NotificationService] Cache hit for actorId:', actorId);
             return this.actorProfileCache.get(actorId) || null;
         }
 
+        console.log('[NotificationService] Cache miss for actorId:', actorId);
         try {
-            const { data, error } = await supabase
+            const { data, error } = await this.supabase
                 .from('profiles')
                 .select('username, avatar_url')
                 .eq('id', actorId)
@@ -212,25 +230,15 @@ export class NotificationService {
 
             if (error) throw error;
 
-            if (data) {
-                this.actorProfileCache.set(actorId, data);
-                return data;
+            const profileData = data ? { username: data.username, avatar_url: data.avatar_url } : null;
+            if (profileData) {
+                this.actorProfileCache.set(actorId, profileData);
             }
-            return null;
+            console.log('[NotificationService] Fetched profile for actorId:', actorId, profileData);
+            return profileData;
         } catch (error: any) {
-            console.error('[NotificationService] Error fetching actor profile:', error.message);
-            return null; // Don't cache errors, maybe retry later?
+            console.error(`[NotificationService] Error fetching actor profile for ID ${actorId}:`, error.message);
+            return null;
         }
-    }
-
-    // Helper to update unread count
-    private _updateUnreadCount(): void {
-        this.unreadCount = this.notifications.filter(n => !n.is_read).length;
-    }
-
-    // Helper to notify the hook about state changes
-    private _notifyStateChange(): void {
-        // Debounce or throttle this if it gets called too frequently in rapid succession
-        this.onStateChange();
     }
 }
