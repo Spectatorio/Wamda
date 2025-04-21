@@ -24,8 +24,6 @@ a:hover {
 
 body {
   margin: 0;
-  /* display: flex; */ /* Removed - AppShell handles layout */
-  /* place-items: center; */ /* Removed - AppShell handles layout */
   min-width: 320px;
   min-height: 100vh;
 }
@@ -66,29 +64,25 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
-/* Removed extra closing brace here */
 
-/* Tiptap Placeholder Styling Test */
 .ProseMirror p.is-editor-empty:first-child::before {
 content: attr(data-placeholder);
 float: left;
-color: #adb5bd; /* Mantine gray color */
+color: #adb5bd;
 pointer-events: none;
 height: 0;
-} /* Added missing closing brace */
-
-/* BlockNote Editor Styles */
-.bn-editor-container {
-  flex-grow: 1;
-  position: relative; /* Needed for positioning of menus */
-  padding: 1rem; /* Add some padding around the raw view */
-  overflow-y: auto; /* Allow scrolling within the editor */
-  min-height: 300px; /* Ensure minimum height */
-  display: flex; /* Use flexbox */
-  flex-direction: column; /* Stack children vertically */
 }
 
-/* Ensure the raw view itself expands */
+.bn-editor-container {
+  flex-grow: 1;
+  position: relative;
+  padding: 1rem;
+  overflow-y: auto;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
 .bn-editor-container > .blocknote {
   flex-grow: 1;
 }
