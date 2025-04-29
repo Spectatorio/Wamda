@@ -119,7 +119,7 @@ const AuthActions = () => {
       <Menu.Dropdown>
         <Menu.Label>Account</Menu.Label>
         <Menu.Item component={Link} to={`/profile/${username ?? 'error-no-username'}`} leftSection={<IconUser size={14} />} disabled={!username}>
-          Profile (Placeholder)
+          Profile
         </Menu.Item>
         <Menu.Divider />
         <Menu.Item color="red" leftSection={<IconLogout size={14} />} onClick={handleSignOut}>

@@ -20,6 +20,7 @@ interface AuthState {
   signInUser: (email: string, password: string) => Promise<boolean>;
   signOutUser: () => Promise<void>;
   awaitAuthState: () => Promise<User | null>;
+  refreshUserProfile: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -169,6 +170,58 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               }
           );
       });
+  },
+
+  refreshUserProfile: async () => {
+    const userId = get().session?.user?.id;
+    if (!userId) {
+      console.error('refreshUserProfile called without a user session.');
+      return;
+    }
+
+    set({ isProfileLoading: true, error: null }); // Indicate loading start
+    try {
+      console.log(`Refreshing profile for user_id: ${userId}`);
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error refreshing profile:', error.message);
+        set({
+          isProfileLoading: false,
+          error: error.message,
+        });
+      } else if (profileData) {
+        console.log('Profile refreshed successfully:', profileData);
+        set({
+          userProfileId: profileData.id,
+          username: profileData.username,
+          avatarUrl: profileData.avatar_url,
+          isProfileLoading: false,
+          error: null,
+        });
+      } else {
+        console.log('No profile found during refresh for user_id:', userId);
+        // Keep existing profile data? Or clear it? Let's clear it for consistency with setSession
+        set({
+          userProfileId: null,
+          username: null,
+          avatarUrl: null,
+          isProfileLoading: false,
+          error: null, // Not an error, just no profile found
+        });
+      }
+    } catch (err: any) {
+      console.error('Exception refreshing profile:', err);
+      set({
+        isProfileLoading: false,
+        error: err.message || 'Failed to refresh profile due to an exception.',
+      });
+    }
+    console.log('Auth state updated after refresh:', useAuthStore.getState());
   },
 }));
 

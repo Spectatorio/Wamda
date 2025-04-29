@@ -136,19 +136,33 @@ function ViewPostPage() {
           setPostData(fetchedPostData);
           setCurrentLikeCount(fetchedPostData.likes[0]?.count ?? 0);
 
-          if (postId) {
-            try {
-              console.log(`[ViewPostPage] Incrementing view count for post: ${postId}`);
-              supabase.rpc('increment_post_view', { post_id_to_increment: postId })
-                .then(({ error: rpcError }) => {
-                  if (rpcError) {
-                    console.error('[ViewPostPage] Error calling increment_post_view RPC:', rpcError);
-                  } else {
-                    console.log(`[ViewPostPage] View count increment initiated for post: ${postId}`);
-                  }
-                });
-            } catch (rpcError) {
-              console.error('[ViewPostPage] Synchronous error setting up increment RPC call:', rpcError);
+          if (user && fetchedPostData.profiles && user.id !== fetchedPostData.profiles.user_id) {
+            if (postId) {
+              try {
+                console.log(`[ViewPostPage] Incrementing view count for post ${postId} by user ${user.id} (not author ${fetchedPostData.profiles.user_id})`);
+                supabase.rpc('increment_post_view', { post_id_to_increment: postId })
+                  .then(({ error: rpcError }) => {
+                    if (rpcError) {
+                      console.error('[ViewPostPage] Error calling increment_post_view RPC:', rpcError);
+                    } else {
+                      console.log(`[ViewPostPage] View count increment initiated for post: ${postId}. Optimistically updating UI.`);
+                      setPostData(prevData => {
+                        if (!prevData) return null;
+                        return { ...prevData, view_count: (prevData.view_count ?? 0) + 1 };
+                      });
+                    }
+                  });
+              } catch (rpcError) {
+                console.error('[ViewPostPage] Synchronous error setting up increment RPC call:', rpcError);
+              }
+            }
+          } else {
+            if (!user) {
+              console.log(`[ViewPostPage] View count not incremented: User not logged in.`);
+            } else if (!fetchedPostData.profiles) {
+              console.log(`[ViewPostPage] View count not incremented: Post author profile data missing.`);
+            } else {
+              console.log(`[ViewPostPage] View count not incremented: User ${user.id} is the author.`);
             }
           }
 

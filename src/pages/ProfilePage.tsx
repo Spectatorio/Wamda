@@ -176,12 +176,12 @@ function ProfilePage() {
         </Grid.Col>
       </Grid>
 
-      {/* Render the Edit Profile Modal only if profile exists and it's the owner's profile */}
+
       {profile && isOwnProfile && (
         <EditProfileModal
           isOpen={isEditModalOpen}
           onClose={handleCloseModal}
-          profile={profile} // Pass profile from hook
+          profile={profile}
           onProfileUpdate={handleProfileUpdate}
         />
       )}

@@ -71,3 +71,5 @@ FOR EACH ROW EXECUTE FUNCTION public.handle_new_notification();
 CREATE TRIGGER on_comment_insert_create_notification
 AFTER INSERT ON public.comments
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_notification();
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;

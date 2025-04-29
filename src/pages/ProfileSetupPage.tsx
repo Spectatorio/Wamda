@@ -46,6 +46,7 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 function ProfileSetupPage() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const refreshUserProfile = useAuthStore((state) => state.refreshUserProfile);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +105,7 @@ function ProfileSetupPage() {
       }
 
       console.log('Profile created successfully!');
+      await refreshUserProfile();
       navigate({to : '/'});
 
     } catch (err) {
